@@ -3,7 +3,6 @@
 using namespace daisy;
 using namespace daisysp;
 DaisyPod hw;
-DaisySeed daisyseed;
 
 #define AUDIO_SAMPLE_RATE 48000
 #define AUDIO_BLOCK_SIZE 128
@@ -19,7 +18,7 @@ Metro timer_second;
 
 MidiUsbHandler midiusb;
 /* </midi> */
-
+bool led_state;
 static void AudioCallback(AudioHandle::InterleavingInputBuffer in,
                           AudioHandle::InterleavingOutputBuffer out,
                           size_t size) {
@@ -28,12 +27,13 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer in,
     uint8_t msg[3] = {0x90, 0x40, 0x7F};
     hw.midi.SendMessage(msg, 3);
     midiusb.SendMessage(msg, 3);
+    hw.SetLed(led_state);
+    led_state = !led_state;
   }
 }
 
 int main(void) {
   hw.Init();
-  daisyseed.StartLog(false);
 
   // initialize midi
   MidiUsbHandler::Config midiusb_config;
