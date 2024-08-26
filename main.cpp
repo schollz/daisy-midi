@@ -18,7 +18,8 @@ Metro timer_second;
 
 MidiUsbHandler midiusb;
 /* </midi> */
-bool led_state;
+Color red, white;
+bool led_state = true;
 static void AudioCallback(AudioHandle::InterleavingInputBuffer in,
                           AudioHandle::InterleavingOutputBuffer out,
                           size_t size) {
@@ -27,7 +28,8 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer in,
     uint8_t msg[3] = {0x90, 0x40, 0x7F};
     hw.midi.SendMessage(msg, 3);
     midiusb.SendMessage(msg, 3);
-    hw.SetLed(led_state);
+    hw.led1.SetColor(led_state ? red : white);
+    hw.led1.Update();
     led_state = !led_state;
   }
 }
@@ -39,6 +41,10 @@ int main(void) {
   MidiUsbHandler::Config midiusb_config;
   midiusb.Init(midiusb_config);
   midiusb.StartReceive();
+
+  // initialize led
+  red.Init(Color::PresetColor::RED);
+  white.Init(Color::PresetColor::WHITE);
 
   // initialize metro
   timer_second.Init(1.0f, AUDIO_SAMPLE_RATE / AUDIO_BLOCK_SIZE);
