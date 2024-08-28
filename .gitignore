@@ -6,6 +6,7 @@ build/
 *.lo
 *.o
 *.obj
+midicom/midicom
 
 # Precompiled Headers
 *.gch

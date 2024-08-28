@@ -1,71 +1,36 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
 
-	log "github.com/schollz/logger" // autoregisters driver
+	log "github.com/schollz/logger"
 	"gitlab.com/gomidi/midi/v2"
-
-	//_ "gitlab.com/gomidi/midi/v2/drivers/portmididrv" // autoregisters driver
-
 	"gitlab.com/gomidi/midi/v2/drivers"
 	_ "gitlab.com/gomidi/midi/v2/drivers/rtmididrv"
 )
 
-var filterMidiName = "Daisy"
-
-func sendNotification(message string) (err error) {
-	params := url.Values{}
-	params.Add("magic"+message, ``)
-	body := strings.NewReader(params.Encode())
-
-	req, err := http.NewRequest("POST", "https://duct.schollz.com/notify?pubsub=true", body)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-	defer resp.Body.Close()
-	return
-}
-
-func parseSysExToString(sysex []byte) (string, error) {
-	if len(sysex) < 3 || sysex[0] != 0xF0 || sysex[len(sysex)-1] != 0xF7 {
-		return "", fmt.Errorf("invalid SysEx message")
-	}
-	messageBytes := sysex[1 : len(sysex)-1]
-	message := string(messageBytes)
-	return message, nil
-}
-
 var isConnected = false
 
-func isAvailable() bool {
-	return strings.Contains(midi.GetInPorts().String(), filterMidiName)
+func isAvailable(filterMidiName string) bool {
+	return strings.Contains(strings.ToLower(midi.GetInPorts().String()), strings.ToLower(filterMidiName))
 }
 
-func doConnection() (stop func(), err error) {
+func doConnection(filterMidiName string) (stop func(), err error) {
 	var midiInput drivers.In
 	ins := midi.GetInPorts()
 	if len(ins) == 0 {
 		log.Error("no input devices")
 		return
 	}
+
 	for _, in := range ins {
-		log.Debugf("found input: '%s'", in.String())
-		if strings.Contains(in.String(), filterMidiName) {
+		log.Tracef("found input: '%s'", in.String())
+		if strings.Contains(strings.ToLower(in.String()), strings.ToLower(filterMidiName)) {
 			midiInput = in
 			break
 		}
@@ -81,11 +46,11 @@ func doConnection() (stop func(), err error) {
 		var ch, key, vel uint8
 		switch {
 		case msg.GetSysEx(&bt):
-			log.Debugf("sysex=%s\n", bt)
+			log.Infof("sysex=%s\n", bt)
 		case msg.GetNoteStart(&ch, &key, &vel):
-			log.Debugf("note_on=%s, ch=%v, vel=%v\n", midi.Note(key), ch, vel)
+			log.Infof("note_on=%s, ch=%v, vel=%v\n", midi.Note(key), ch, vel)
 		case msg.GetNoteEnd(&ch, &key):
-			log.Debugf("note_off=%s, ch=%v\n", midi.Note(key), ch)
+			log.Infof("note_off=%s, ch=%v\n", midi.Note(key), ch)
 		default:
 			// ignore
 		}
@@ -97,11 +62,32 @@ func doConnection() (stop func(), err error) {
 	}
 
 	isConnected = true
-	log.Debugf("connected to %s", midiInput.String())
+	log.Infof("connected to\n\t'%s'", midiInput.String())
 	return
 }
 
+var flagMidiName string
+var flagDebug bool
+
+func init() {
+	flag.BoolVar(&flagDebug, "debug", false, "debug mode")
+	flag.StringVar(&flagMidiName, "midi", "", "midi name")
+}
+
 func main() {
+	flag.Parse()
+	if flagMidiName == "" {
+		fmt.Println("Usage: midicom --midi <midi name>")
+		os.Exit(1)
+	}
+
+	filterMidiName := flagMidiName
+	if flagDebug {
+		log.SetLevel("trace")
+	} else {
+		log.SetLevel("info")
+	}
+
 	var err error
 	done := make(chan struct{})
 	c := make(chan os.Signal, 1)
@@ -120,18 +106,15 @@ func main() {
 		// check if midi is connected
 		for {
 			if isConnected {
-				if !isAvailable() {
+				if !isAvailable(filterMidiName) {
 					isConnected = false
-					log.Debug("disconnected")
 					midi.CloseDriver()
 				}
 			} else {
-				if isAvailable() {
-					stopFunc, err = doConnection()
+				if isAvailable(filterMidiName) {
+					stopFunc, err = doConnection(filterMidiName)
 					if err != nil {
 						log.Error(err)
-					} else {
-						log.Debug("connected")
 					}
 				}
 			}
