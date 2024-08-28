@@ -48,6 +48,14 @@ class DaisyMidi {
   }
 
   void handlerHWMidiEvent(MidiEvent ev) {
+    if (in_sysex_message) {
+      // add bytes to sysex buffer
+      if (ev.type == SystemCommon && ev.sc_type == SystemExclusive) {
+        for (size_t i = 0; i < ev.sysex_message_len; i++) {
+          midi_buffer[midi_buffer_index++] = ev.sysex_data[i];
+        }
+      }
+    }
     switch (ev.type) {
       case SystemRealTime: {
         switch (ev.srt_type) {
@@ -55,6 +63,23 @@ class DaisyMidi {
             if (midi_timing_callback_) {
               midi_timing_callback_();
             }
+            break;
+          default:
+            break;
+        }
+      }
+      case SystemCommon: {
+        switch (ev.sc_type) {
+          case SystemExclusive:
+            in_sysex_message = true;
+            break;
+          case SysExEnd:
+            in_sysex_message = false;
+            if (sysex_callback_ && midi_buffer_index > 0) {
+              sysex_callback_(reinterpret_cast<const uint8_t*>(midi_buffer),
+                              midi_buffer_index);
+            }
+            midi_buffer_index = 0;
             break;
           default:
             break;
