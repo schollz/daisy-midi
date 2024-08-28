@@ -34,6 +34,24 @@ int main(void) {
 
   // initialize midi
   daisy_midi.Init();
+  daisy_midi.SetNoteOnCallback(
+      [](uint8_t channel, uint8_t note, uint8_t velocity) {
+        daisy_midi.sysex_printf("NoteOn: %d %d %d", channel, note, velocity);
+      });
+  daisy_midi.SetNoteOffCallback(
+      [](uint8_t channel, uint8_t note, uint8_t velocity) {
+        daisy_midi.sysex_printf("NoteOff: %d %d %d", channel, note, velocity);
+      });
+  daisy_midi.SetMidiTimingCallback(
+      []() { daisy_midi.sysex_printf("midi timing"); });
+  daisy_midi.SetSysExCallback([](const uint8_t* data, size_t size) {
+    // check if data is "abc"
+    if (size == 3 && data[0] == 'a' && data[1] == 'b' && data[2] == 'c') {
+      daisy_midi.sysex_printf("sysex: got abc");
+    } else {
+      daisy_midi.sysex_printf("sysex: %s (%d)", data, size);
+    }
+  });
 
   // initialize led
   red.Init(Color::PresetColor::RED);

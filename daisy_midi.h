@@ -21,9 +21,14 @@ using namespace daisy;
 
 class DaisyMidi {
  public:
-  DaisyMidi() {}
+  DaisyMidi()
+      : note_on_callback_(nullptr),
+        note_off_callback_(nullptr),
+        midi_timing_callback_(nullptr),
+        sysex_callback_(nullptr) {}
+
   void Init() {
-    // initialize midi
+    // Initialize MIDI
     MidiUsbTransport::Config midiusb_out_config;
     midiusb_out.Init(midiusb_out_config);
     midiusb_out.StartRx(
@@ -33,8 +38,75 @@ class DaisyMidi {
         this);
   }
 
-  void send_sysex(char* str) {
-    // build sysex message from str
+  void sysex_printf(const char* format, ...) {
+    char buffer[128];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    sysex_send(buffer);
+  }
+
+  void handlerHWMidiEvent(MidiEvent ev) {
+    switch (ev.type) {
+      case SystemRealTime: {
+        switch (ev.srt_type) {
+          case TimingClock:
+            if (midi_timing_callback_) {
+              midi_timing_callback_();
+            }
+            break;
+          default:
+            break;
+        }
+      }
+      case NoteOff:
+        if (note_off_callback_) {
+          note_off_callback_(ev.channel, ev.data[0], ev.data[1]);
+        }
+        break;
+      case NoteOn:
+        if (note_on_callback_) {
+          note_on_callback_(ev.channel, ev.data[0], ev.data[1]);
+        }
+      default:
+        break;
+    }
+  }
+
+  // Setters for callbacks
+  void SetNoteOnCallback(void (*callback)(uint8_t channel, uint8_t note,
+                                          uint8_t velocity)) {
+    note_on_callback_ = callback;
+  }
+
+  void SetNoteOffCallback(void (*callback)(uint8_t channel, uint8_t note,
+                                           uint8_t velocity)) {
+    note_off_callback_ = callback;
+  }
+
+  void SetMidiTimingCallback(void (*callback)()) {
+    midi_timing_callback_ = callback;
+  }
+
+  void SetSysExCallback(void (*callback)(const uint8_t* data, size_t size)) {
+    sysex_callback_ = callback;
+  }
+
+ private:
+  MidiUsbTransport midiusb_out;
+  char midi_buffer[128];
+  size_t midi_buffer_index = 0;
+  bool in_sysex_message = false;
+
+  // Function pointers for callbacks
+  void (*note_on_callback_)(uint8_t channel, uint8_t note, uint8_t velocity);
+  void (*note_off_callback_)(uint8_t channel, uint8_t note, uint8_t velocity);
+  void (*midi_timing_callback_)();
+  void (*sysex_callback_)(const uint8_t* data, size_t size);
+
+  void sysex_send(char* str) {
+    // Build sysex message from str
     uint8_t sysex_message[128];
     sysex_message[0] = 0xF0;  // sysex start
     for (size_t i = 0; i < strlen(str); i++) {
@@ -45,33 +117,39 @@ class DaisyMidi {
     midiusb_out.Tx(sysex_message, strlen(str) + 2);
   }
 
-  void handlerHWMidiEvent(MidiEvent ev) {}
-
- private:
-  MidiUsbTransport midiusb_out;
-  char midi_buffer[128];
-  size_t midi_buffer_index = 0;
-  bool in_sysex_message = false;
-
   void handlerUSBMidiEvent(uint8_t* data, size_t size) {
     // Iterate through the incoming MIDI data
     if (!in_sysex_message) {
-      char str[128];
-      sprintf(str, "MIDI message:");
-      // print all data
-      for (size_t i = 0; i < size; i++) {
-        sprintf(str + strlen(str), "%02X", data[i]);
-      }
       switch (data[0]) {
-        case MIDI_RT_CLOCK:
         case MIDI_NOTE_ON:
+          if (note_on_callback_) {
+            uint8_t channel = data[0] & 0x0F;
+            uint8_t note = data[1];
+            uint8_t velocity = data[2];
+            note_on_callback_(channel, note, velocity);
+          }
+          break;
+
         case MIDI_NOTE_OFF:
-          send_sysex(str);
-          return;
+          if (note_off_callback_) {
+            uint8_t channel = data[0] & 0x0F;
+            uint8_t note = data[1];
+            uint8_t velocity = data[2];
+            note_off_callback_(channel, note, velocity);
+          }
+          break;
+
+        case MIDI_TIMING:
+          if (midi_timing_callback_) {
+            midi_timing_callback_();
+          }
+          break;
+
         default:
           break;
       }
     }
+
     // SYSEX
     for (size_t i = 0; i < size; ++i) {
       uint8_t byte = data[i];
@@ -82,10 +160,16 @@ class DaisyMidi {
 
         if (byte == MIDI_SYSEX_END ||
             midi_buffer_index >= sizeof(midi_buffer)) {
-          // end of sysex message
+          // End of SysEx message
           in_sysex_message = false;
+
+          // Invoke SysEx callback if set
+          if (sysex_callback_) {
+            sysex_callback_(reinterpret_cast<const uint8_t*>(midi_buffer),
+                            midi_buffer_index);
+          }
+
           midi_buffer_index = 0;
-          send_sysex(midi_buffer);
         }
       } else if (byte == MIDI_SYSEX_START) {
         // Start of a SysEx message
