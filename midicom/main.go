@@ -77,13 +77,11 @@ func doConnection() (stop func(), err error) {
 
 	// listen to midi
 	stop, err = midi.ListenTo(midiInput, func(msg midi.Message, timestamps int32) {
-		log.Debugf("msg=%v, timestamps=%v", msg, timestamps)
 		var bt []byte
 		var ch, key, vel uint8
 		switch {
 		case msg.GetSysEx(&bt):
-			log.Debugf("%s", bt)
-			// send a note on
+			log.Debugf("sysex=%s\n", bt)
 		case msg.GetNoteStart(&ch, &key, &vel):
 			log.Debugf("note_on=%s, ch=%v, vel=%v\n", midi.Note(key), ch, vel)
 		case msg.GetNoteEnd(&ch, &key):
