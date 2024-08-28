@@ -8,7 +8,7 @@ USE_DAISYSP_LGPL = 1
 # without BOOT_SRAM: make program
 # with BOOT_SRAM: make program-boot && make program-dfu
 # Sources
-CPP_SOURCES = main.cpp
+CPP_SOURCES = main.cpp daisy_midi.cpp
 
 # C_SOURCES = audio.c
 
