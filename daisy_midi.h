@@ -155,27 +155,20 @@ class DaisyMidi {
       uint8_t byte = data[i];
 
       if (in_sysex_message) {
-        // We are in the middle of a SysEx message
-        midi_buffer[midi_buffer_index++] = byte;
-
         if (byte == MIDI_SYSEX_END ||
             midi_buffer_index >= sizeof(midi_buffer)) {
-          // End of SysEx message
           in_sysex_message = false;
-
-          // Invoke SysEx callback if set
-          if (sysex_callback_) {
+          if (sysex_callback_ && midi_buffer_index > 0) {
             sysex_callback_(reinterpret_cast<const uint8_t*>(midi_buffer),
                             midi_buffer_index);
           }
-
           midi_buffer_index = 0;
+        } else {
+          midi_buffer[midi_buffer_index++] = byte;
         }
       } else if (byte == MIDI_SYSEX_START) {
-        // Start of a SysEx message
         in_sysex_message = true;
         midi_buffer_index = 0;
-        midi_buffer[midi_buffer_index++] = byte;
       }
     }
   }

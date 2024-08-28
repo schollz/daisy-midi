@@ -43,13 +43,12 @@ int main(void) {
         daisy_midi.sysex_printf("NoteOff: %d %d %d", channel, note, velocity);
       });
   daisy_midi.SetMidiTimingCallback(
-      []() { daisy_midi.sysex_printf("midi timing"); });
+      []() { daisy_midi.sysex_printf("midi timing2"); });
   daisy_midi.SetSysExCallback([](const uint8_t* data, size_t size) {
-    // check if data is "abc"
     if (size == 3 && data[0] == 'a' && data[1] == 'b' && data[2] == 'c') {
-      daisy_midi.sysex_printf("sysex: got abc");
+      daisy_midi.sysex_printf("got abc");
     } else {
-      daisy_midi.sysex_printf("sysex: %s (%d)", data, size);
+      daisy_midi.sysex_printf("%s (%d)", size, data);
     }
   });
 
