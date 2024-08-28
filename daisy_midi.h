@@ -47,6 +47,31 @@ class DaisyMidi {
     sysex_send(buffer);
   }
 
+  void sysex_printf_buffer(const char* format, ...) {
+    char buffer[128];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    // add buffer to sysex_buffer
+    for (size_t i = 0; i < strlen(buffer); i++) {
+      if (sysex_buffer_i >= 126) {
+        return;
+      }
+      sysex_buffer[sysex_buffer_i] = buffer[i];
+      sysex_buffer_i++;
+    }
+  }
+
+  void sysex_send_buffer() {
+    if (sysex_buffer_i == 0) {
+      return;
+    }
+    // send sysex_buffer
+    sysex_send(sysex_buffer);
+    sysex_buffer_i = 0;
+  }
+
   void handlerHWMidiEvent(MidiEvent ev) {
     if (in_sysex_message) {
       // add bytes to sysex buffer
@@ -121,6 +146,8 @@ class DaisyMidi {
  private:
   MidiUsbTransport midiusb_out;
   char midi_buffer[128];
+  char sysex_buffer[126];
+  size_t sysex_buffer_i = 0;
   size_t midi_buffer_index = 0;
   bool in_sysex_message = false;
 

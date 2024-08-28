@@ -46,10 +46,11 @@ int main(void) {
       []() { daisy_midi.sysex_printf("midi timing"); });
   daisy_midi.SetSysExCallback([](const uint8_t* data, size_t size) {
     if (size == 3 && data[0] == 'a' && data[1] == 'b' && data[2] == 'c') {
-      daisy_midi.sysex_printf("got abc");
+      daisy_midi.sysex_printf_buffer("got abc");
     } else {
-      daisy_midi.sysex_printf("%s (%d)", size, data);
+      daisy_midi.sysex_printf_buffer("%s (%d)", size, data);
     }
+    daisy_midi.sysex_send_buffer();
   });
 
   // initialize led
